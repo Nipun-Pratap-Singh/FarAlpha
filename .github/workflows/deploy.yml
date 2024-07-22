@@ -1,4 +1,4 @@
-name: Deploy to VM
+name: Deploy API
 
 on:
   push:
@@ -10,25 +10,31 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4  # Use the latest version
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y python3 python3-pip
-        pip3 install django
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
 
-    - name: Deploy to VM
-      env:
-        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-      run: |
-        echo "$SSH_PRIVATE_KEY" > private_key.pem
-        chmod 600 private_key.pem
-        scp -i private_key.pem -o StrictHostKeyChecking=no -r . azureuser@20.55.75.96:/home/azureuser/myproject || exit 1
-        ssh -i private_key.pem -o StrictHostKeyChecking=no azureuser@20.55.75.96 << 'EOF'
-          cd /home/azureuser/myproject || exit 1
-          sudo python3 manage.py migrate || exit 1
-          sudo python3 manage.py collectstatic --noinput || exit 1
-          sudo systemctl restart myproject.service || exit 1  # Ensure a systemd service is set up
-        EOF
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install django
+
+      - name: Deploy to VM
+        env:
+          HOST: ${{ secrets.VM_HOST }}
+          USERNAME: ${{ secrets.VM_USERNAME }}
+          SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+        run: |
+          echo "${SSH_KEY}" | base64 -d > /tmp/deploy_key.pem
+          chmod 600 /tmp/deploy_key.pem
+          ssh -i /tmp/deploy_key.pem -o StrictHostKeyChecking=no $USERNAME@$HOST << 'EOF'
+          cd /path/to/your/project
+          git pull origin main
+          pip install -r requirements.txt
+          python manage.py migrate
+          sudo systemctl restart your_django_service
+          EOF
